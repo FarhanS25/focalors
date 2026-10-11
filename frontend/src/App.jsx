@@ -26,8 +26,11 @@ function App() {
         <Hero />
         <Features />
         <HowItWorks />
-        <Mission />
-        <Footer />
+
+        <div className="relative isolate bg-[#071C2B]">
+          <Mission />
+          <Footer />
+        </div>
       </main>
     </>
   );
