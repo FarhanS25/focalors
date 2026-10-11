@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
+from bson import ObjectId
+from bson.errors import InvalidId
 from pymongo import DESCENDING, MongoClient
 from pymongo.errors import PyMongoError
 
@@ -354,6 +356,25 @@ def _run_limit(limit):
     if limit < 1 or limit > 100:
         raise ValueError("limit must be an integer from 1 to 100.")
     return limit
+
+
+def load_run(run_id):
+    """Return one stored run, including its evaluation block, or None.
+
+    The HTTP layer decides whether evaluation fields leave the process.
+    """
+    try:
+        identifier = ObjectId(str(run_id))
+    except (InvalidId, TypeError):
+        return None
+    _ensure_ready()
+    try:
+        return collection().find_one({"_id": identifier})
+    except DatabaseError:
+        raise
+    except Exception as exc:
+        logger.error("MongoDB read failed: %s", type(exc).__name__)
+        raise DatabaseUnavailableError("Could not read saved runs.") from exc
 
 
 def recent_runs(limit=20):

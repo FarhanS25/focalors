@@ -55,6 +55,13 @@ class MemoryCollection:
     def find(self, *args, **kwargs):
         return MemoryCursor(copy.deepcopy(self.documents))
 
+    def find_one(self, query=None):
+        query = query or {}
+        for document in self.documents:
+            if all(document.get(key) == value for key, value in query.items()):
+                return copy.deepcopy(document)
+        return None
+
 
 class MemoryDatabase:
     def __init__(self):

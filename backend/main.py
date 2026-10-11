@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.exceptions import RequestValidationError
@@ -8,8 +8,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
-from database import DatabaseError, check_connection, init_db, recent_runs, save_result
+from database import DatabaseError, check_connection, init_db, load_run, recent_runs, save_result
 from engine import investigate, network_data
+
+# Investigation responses omit these keys at every level. Evaluation keeps them.
+# The ranker does not read them back; they are labels stored for evaluation.
+_GROUND_TRUTH_KEYS = frozenset({
+    "leak_pipe",
+    "actual_pipe_rank",
+    "true_pipe_in_candidate_set",
+    "is_ground_truth",
+})
 
 logger = logging.getLogger("focalors.api")
 
@@ -47,7 +56,64 @@ async def validation_exception_handler(_request, exc):
     return JSONResponse(status_code=422, content={"detail": "; ".join(messages) or "Invalid request"})
 
 
+def requested_view(value):
+    text = str(value or "investigation").strip().lower()
+    if text not in {"investigation", "evaluation"}:
+        raise HTTPException(status_code=422, detail="view must be investigation or evaluation")
+    return text
+
+
+def project_view(value, view):
+    """Copy a response, dropping ground-truth keys unless this is evaluation."""
+    if isinstance(value, list):
+        return [project_view(item, view) for item in value]
+    if isinstance(value, dict):
+        projected = {}
+        for key, item in value.items():
+            if view != "evaluation" and key in _GROUND_TRUTH_KEYS:
+                continue
+            projected[key] = project_view(item, view)
+        return projected
+    return value
+
+
+def present_saved_run(document, view):
+    """Rebuild the fields the UI reads from a stored run, then apply the view."""
+    evaluation = document.get("evaluation") or {}
+    configuration = document.get("configuration") or {}
+    leak_pipe = evaluation.get("leak_pipe")
+    candidates = []
+    for row in document.get("predictions") or []:
+        pipe_id = row.get("pipe_id")
+        candidates.append({
+            "pipe_id": pipe_id,
+            "matching_error": row.get("matching_error"),
+            "rank": row.get("rank"),
+            "is_ground_truth": pipe_id is not None and str(pipe_id) == str(leak_pipe),
+        })
+    payload = {
+        "run_id": str(document.get("_id")),
+        "elapsed_seconds": document.get("elapsed_seconds"),
+        "leak_pipe": leak_pipe,
+        "actual_pipe_rank": evaluation.get("actual_pipe_rank"),
+        "true_pipe_in_candidate_set": evaluation.get("true_pipe_in_candidate_set"),
+        "candidate_count": document.get("candidate_count"),
+        "candidate_selection": configuration.get("candidate_selection"),
+        "candidates": candidates,
+        "sensors": document.get("sensors") or [],
+        "observed_signal_max_abs_m": document.get("observed_signal_max_abs_m"),
+        "failures": document.get("failures") or [],
+        "notes": document.get("notes") or [],
+        "demonstration": document.get("demonstration"),
+        "status": document.get("status"),
+    }
+    projected = project_view(payload, view)
+    projected["view"] = view
+    return projected
+
+
 class SimulationRequest(BaseModel):
+    view: Literal["investigation", "evaluation"] = "investigation"
     leak_pipe: Optional[str] = Field(
         default=None,
         description="Pipe used to generate the simulated observations. The ranker does not receive this id.",
@@ -102,7 +168,9 @@ def simulate(request: SimulationRequest):
             request.sample_time_s,
         )
         result["run_id"] = save_result(result)
-        return result
+        projected = project_view(result, request.view)
+        projected["view"] = request.view
+        return projected
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except DatabaseError as exc:
@@ -113,11 +181,28 @@ def simulate(request: SimulationRequest):
 
 
 @app.get("/api/runs")
-def get_runs(limit: int = Query(default=20, ge=1, le=100)):
+def get_runs(
+    limit: int = Query(default=20, ge=1, le=100),
+    view: str = Query(default="investigation"),
+):
+    selected = requested_view(view)
     try:
-        return {"runs": recent_runs(limit)}
+        runs = [project_view(run, selected) for run in recent_runs(limit)]
     except DatabaseError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"view": selected, "runs": runs}
+
+
+@app.get("/api/runs/{run_id}")
+def get_saved_run(run_id: str, view: str = Query(default="investigation")):
+    selected = requested_view(view)
+    try:
+        document = load_run(run_id)
+    except DatabaseError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if not document:
+        raise HTTPException(status_code=404, detail="Unknown run.")
+    return present_saved_run(document, selected)
 
 
 init_db()

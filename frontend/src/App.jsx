@@ -134,11 +134,13 @@ export default function App() {
   const [focusPipe, setFocusPipe] = useState(null)
   const [view, setView] = useState('investigation')
   const [runsState, setRunsState] = useState('unknown')
+  const activeRunRef = useRef(null)
+  const skipViewReload = useRef(true)
   const evaluating = view === 'evaluation'
 
-  async function loadRuns() {
+  async function loadRuns(nextView = view) {
     try {
-      const response = await fetch(`${API}/api/runs?limit=6`)
+      const response = await fetch(`${API}/api/runs?limit=6&view=${encodeURIComponent(nextView)}`)
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) {
         setRuns([])
@@ -191,6 +193,46 @@ export default function App() {
   useEffect(() => {
     loadNetwork()
   }, [])
+
+  useEffect(() => {
+    if (skipViewReload.current) {
+      skipViewReload.current = false
+      return undefined
+    }
+    if (view !== 'evaluation') {
+      setResult((current) => {
+        if (!current) return current
+        const rest = { ...current, view: 'investigation' }
+        delete rest.leak_pipe
+        delete rest.actual_pipe_rank
+        delete rest.true_pipe_in_candidate_set
+        rest.candidates = (current.candidates || []).map((candidate) => {
+          const next = { ...candidate }
+          delete next.is_ground_truth
+          return next
+        })
+        return rest
+      })
+    }
+    let cancelled = false
+    async function reloadForView() {
+      await loadRuns(view)
+      const runId = activeRunRef.current
+      if (!runId) return
+      try {
+        const response = await fetch(`${API}/api/runs/${runId}?view=${encodeURIComponent(view)}`)
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(messageFrom(payload, response.status))
+        if (!cancelled) setResult(payload)
+      } catch (err) {
+        if (!cancelled) setError(err.message || 'Could not load this run for the selected view.')
+      }
+    }
+    reloadForView()
+    return () => {
+      cancelled = true
+    }
+  }, [view])
 
   useEffect(() => {
     if (!network || !mapRef.current) return undefined
@@ -270,6 +312,7 @@ export default function App() {
     event.preventDefault()
     setRunning(true)
     setError('')
+    activeRunRef.current = null
     setResult(null)
     setFocusPipe(null)
     const scopeText = scope === 'all' ? `all ${network?.pipe_count ?? ''} pipes`.replace('  ', ' ') : `${scope} sampled pipes`
@@ -278,6 +321,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          view,
           leak_pipe: leakPipe.trim() || null,
           leak_area_m2: Number(leakArea),
           sensor_count: 5,
@@ -287,8 +331,9 @@ export default function App() {
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(messageFrom(payload, response.status))
+      activeRunRef.current = payload.run_id || null
       setResult(payload)
-      await loadRuns()
+      await loadRuns(view)
     } catch (err) {
       setError(err.message || `Simulation failed while evaluating ${scopeText}.`)
     } finally {
@@ -430,7 +475,7 @@ export default function App() {
                 <div className="success" role="status">
                   Simulation finished in {result.elapsed_seconds}s. Controlled WNTR demonstration, not field validation.
                 </div>
-                {evaluating && (
+                {evaluating && result.leak_pipe && (
                   <div>
                     <small>Scenario leak</small>
                     <b>Pipe {result.leak_pipe}</b>
@@ -442,7 +487,7 @@ export default function App() {
                   <b>{result.candidate_count}</b>
                   <small>{result.candidate_selection === 'all_pipes' ? 'Every Net3 pipe' : 'Spatial sample'}</small>
                 </div>
-                {evaluating && (
+                {evaluating && result.actual_pipe_rank !== undefined && (
                   <div>
                     <small>Post-hoc scenario rank</small>
                     <b>{result.actual_pipe_rank ? `#${result.actual_pipe_rank}` : 'Not ranked'}</b>
@@ -594,9 +639,9 @@ export default function App() {
           <div className={evaluating ? 'runs' : 'runs investigation'}>
             {runs.map((run) => (
               <div className="run" key={run.id}>
-                <b>{evaluating ? `#${run.id} · Pipe ${run.leak_pipe}` : `#${run.id}`}</b>
+                <b>{evaluating && run.leak_pipe ? `#${run.id} · Pipe ${run.leak_pipe}` : `#${run.id}`}</b>
                 <span>{run.candidate_count} ranked</span>
-                {evaluating && (
+                {evaluating && run.actual_pipe_rank !== undefined && (
                   <span>{run.actual_pipe_rank ? `scenario rank #${run.actual_pipe_rank}` : 'scenario not ranked'}</span>
                 )}
                 <span className="muted">{run.created_at} UTC</span>
