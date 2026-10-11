@@ -8,24 +8,30 @@ The leak ranker compares pressure-change signatures. It does not receive the sce
 
 Completed runs are stored in one collection, `simulation_runs`. Sensor readings and ranked pipes are nested in that document. The scenario leak id is stored under `evaluation`, separate from the ranked predictions. The ranker does not read the database.
 
-1. Create a free Atlas cluster and a database user.
-2. In Atlas, allow your IP under Network Access, or use `0.0.0.0/0` only for a short-lived demo.
-3. Copy the SRV connection string. It looks like `mongodb+srv://USER:PASSWORD@CLUSTER.mongodb.net/`.
-4. From the repository root, copy the example environment file and edit it:
+The API reads `MONGODB_URI` from the environment. On startup it loads `backend/.env` using the path of `backend/database.py`, so the terminal's current directory does not matter. A repository-root `.env` fills only names that are still unset. A variable already exported in the shell wins over both files. Restart the API after changing either file.
+
+Do these steps in the Atlas website. The repository does not contain a cluster or a password.
+
+1. Sign in at [cloud.mongodb.com](https://cloud.mongodb.com) and create a project.
+2. Create a free M0 cluster in a region near you. Wait until the cluster status is ready.
+3. Under Database Access, add a database user. Give that user the built-in `readWrite` role on the database `focalors`. Use a password that is not reused elsewhere. Do not use the Atlas account password, and do not grant `atlasAdmin` for this demo.
+4. Under Network Access, choose Add IP Address, then Add Current IP Address. Wait until that entry is Active. Leave `0.0.0.0/0` unset; that rule would allow any address to attempt a login.
+5. Open the cluster, choose Connect, then Drivers, then Python. Copy the `mongodb+srv://` connection string. Replace the `<password>` placeholder with the database user's password. If the password contains `@`, `:`, `/`, `?`, `#`, `[`, `]`, or `%`, percent-encode that character first. The string should look like the placeholder in `.env.example`, with your own user, password, and host.
+6. From the repository root, create the local env file and edit it. Keep `.env.example` as the placeholder template.
 
 ```powershell
-copy .env.example .env
+copy .env.example backend\.env
 ```
 
-Set these variables in `.env`. Do not commit `.env` or put a real password in `.env.example`.
+Edit `backend/.env`. Set `MONGODB_URI` to the string from step 5. `MONGODB_DATABASE` selects the database name (`focalors` if omitted). Runs are stored in `simulation_runs` unless `MONGODB_COLLECTION` is set. The database name comes from `MONGODB_DATABASE`, so the URI path can stay empty. An older `MONGODB_DB` value is used only when `MONGODB_DATABASE` is absent.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `MONGODB_URI` | Yes | Atlas connection string |
-| `MONGODB_DB` | No | Database name. Defaults to `focalors` |
+| `MONGODB_DATABASE` | No | Database name. Defaults to `focalors` |
 | `MONGODB_COLLECTION` | No | Collection name. Defaults to `simulation_runs` |
 
-The API reads environment variables. A `.env` file in the repository root or in `backend/` is loaded if `python-dotenv` is installed, and it does not override variables already set in the shell.
+Do not commit `backend/.env` or paste a real password into `.env.example`, the README, or source code.
 
 ## Backend
 
@@ -39,15 +45,33 @@ python -m pip install -r requirements.txt
 uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-Check `http://127.0.0.1:8000/api/health`. `status` is `ok` only when MongoDB answers a ping. If the database is down or `MONGODB_URI` is missing, `status` is `degraded` and `database.detail` explains it without including the connection string. `GET /api/network` still works in that case. `POST /api/simulate` returns HTTP 503 instead of pretending the run was saved.
+Check `http://127.0.0.1:8000/api/health`. The response is HTTP 200 in all three database states so the network map can still load. `status` is `ok` only when MongoDB answers a ping. The body never includes the connection string.
+
+| Situation | `status` | `database.configured` | `database.detail` |
+| --- | --- | --- | --- |
+| MongoDB answered the ping | `ok` | `true` | omitted |
+| `MONGODB_URI` is missing | `degraded` | `false` | `MONGODB_URI is not set.` |
+| URI is set, but the server cannot be reached | `degraded` | `true` | `Could not reach MongoDB.` |
+
+`GET /api/network` still works when the database is degraded. `POST /api/simulate` and `GET /api/runs` return HTTP 503 in that case. A 503 means the run was not saved.
 
 Use `127.0.0.1` rather than `localhost` so the frontend does not hit an IPv6 address the server is not bound to.
 
-Check the database without printing the URI:
+From `backend`, with the virtual environment active, this check prints the connection report and does not print the URI or password:
 
 ```powershell
 cd backend
-.\.venv\Scripts\python.exe -c "import database; print(database.ping())"
+.\.venv\Scripts\Activate.ps1
+python -c "import database; print(database.check_connection())"
+```
+
+`database.ping()` prints the same report. A connected database prints `status` `ok` plus the database and collection names. `configured` false means `MONGODB_URI` is missing. `configured` true with `status` `unavailable` means the URI is set and the server could not be reached. Restart `uvicorn` after a successful check so the API process reloads `backend/.env`.
+
+After that check prints `status` `ok`, save one spatial sample and read it back. A full 117-pipe search is optional. This request returns HTTP 503, and does not save a run, when MongoDB is unavailable.
+
+```powershell
+curl.exe -s -X POST http://127.0.0.1:8000/api/simulate -H "Content-Type: application/json" -d "{\"leak_pipe\":\"329\",\"leak_area_m2\":0.0001,\"sensor_count\":5,\"candidate_limit\":15,\"sample_time_s\":7200}"
+curl.exe -s http://127.0.0.1:8000/api/runs
 ```
 
 ## Frontend
@@ -61,6 +85,8 @@ npm run dev
 ```
 
 Open the Vite URL (usually `http://127.0.0.1:5173`).
+
+Results open in Investigation view. That map and ranking show virtual sensors and the lowest-RMSE pipes, and they do not mark the scenario leak. Switch to Evaluation to inspect the configured leak and its rank after sorting. RMSE stays a matching error in meters, not a probability.
 
 If the API is not on port 8000, create `frontend/.env` with `VITE_API_BASE=http://127.0.0.1:8000`.
 

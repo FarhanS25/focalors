@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
@@ -6,8 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
-from database import DatabaseError, init_db, ping, recent_runs, save_result
+from database import DatabaseError, check_connection, init_db, recent_runs, save_result
 from engine import investigate, network_data
+
+logger = logging.getLogger("focalors.api")
 
 app = FastAPI(title="FOCALORS API", version="0.2.0")
 app.add_middleware(
@@ -55,7 +58,7 @@ class SimulationRequest(BaseModel):
 
 @app.get("/api/health")
 def health():
-    database_status = ping()
+    database_status = check_connection()
     return {
         "status": "ok" if database_status["status"] == "ok" else "degraded",
         "service": "FOCALORS API",
@@ -69,10 +72,8 @@ def get_network():
     try:
         return network_data()
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Could not load Net3: {type(exc).__name__}: {exc}",
-        ) from exc
+        logger.exception("Could not load Net3")
+        raise HTTPException(status_code=500, detail="Could not load Net3.") from exc
 
 
 @app.post("/api/simulate")
@@ -92,10 +93,8 @@ def simulate(request: SimulationRequest):
     except DatabaseError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Simulation failed: {type(exc).__name__}: {exc}",
-        ) from exc
+        logger.exception("Simulation failed")
+        raise HTTPException(status_code=500, detail="Simulation failed.") from exc
 
 
 @app.get("/api/runs")

@@ -35,14 +35,19 @@ class DatabaseUnavailableError(DatabaseError):
 
 
 def load_env():
+    """Load env files from this module's directory, not from the process cwd.
+
+    An environment variable already set in the shell wins. ``backend/.env``
+    then fills anything still missing, and a repository-root ``.env`` fills
+    only names that neither of those provided.
+    """
     try:
         from dotenv import load_dotenv
     except ImportError:
         return
     backend_dir = Path(__file__).resolve().parent
-    # Existing process variables win. The repo-root file wins over backend/.env.
-    load_dotenv(backend_dir.parent / ".env", override=False)
     load_dotenv(backend_dir / ".env", override=False)
+    load_dotenv(backend_dir.parent / ".env", override=False)
 
 
 def mongodb_uri():
@@ -50,7 +55,11 @@ def mongodb_uri():
 
 
 def db_name():
-    return os.environ.get("MONGODB_DB", "focalors").strip() or "focalors"
+    for key in ("MONGODB_DATABASE", "MONGODB_DB"):
+        value = os.environ.get(key, "").strip()
+        if value:
+            return value
+    return "focalors"
 
 
 def collection_name():
@@ -85,6 +94,8 @@ def get_client():
             serverSelectionTimeoutMS=5000,
             connectTimeoutMS=5000,
             retryWrites=True,
+            tz_aware=True,
+            tzinfo=timezone.utc,
         )
     return _client
 
@@ -189,7 +200,8 @@ def _ensure_ready():
     _indexes_ready = True
 
 
-def ping():
+def check_connection():
+    """Ping MongoDB with the shared client. The result never includes the URI."""
     if not _injected and not mongodb_uri():
         return {
             "status": "unavailable",
@@ -221,6 +233,11 @@ def ping():
         "database": db_name(),
         "collection": collection_name(),
     }
+
+
+def ping():
+    """Same report as ``check_connection``. Kept for the existing diagnostic command."""
+    return check_connection()
 
 
 def init_db():
@@ -259,14 +276,33 @@ def save_result(result):
 
 def _created_at_text(value):
     if isinstance(value, datetime):
+        # PyMongo stores UTC. A naive value is that UTC time, not the machine's local time.
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     return value
 
 
+def _run_limit(limit):
+    if isinstance(limit, bool) or isinstance(limit, float):
+        raise ValueError("limit must be an integer from 1 to 100.")
+    if isinstance(limit, str):
+        text = limit.strip()
+        if not text.isdigit():
+            raise ValueError("limit must be an integer from 1 to 100.")
+        limit = int(text)
+    if not isinstance(limit, int):
+        raise ValueError("limit must be an integer from 1 to 100.")
+    if limit < 1 or limit > 100:
+        raise ValueError("limit must be an integer from 1 to 100.")
+    return limit
+
+
 def recent_runs(limit=20):
+    limit = _run_limit(limit)
     _ensure_ready()
     try:
-        cursor = collection().find().sort("created_at", DESCENDING).limit(int(limit))
+        cursor = collection().find().sort("created_at", DESCENDING).limit(limit)
         documents = list(cursor)
     except DatabaseError:
         raise

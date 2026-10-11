@@ -129,15 +129,25 @@ export default function App() {
   const [leakArea, setLeakArea] = useState('0.0001')
   const [scope, setScope] = useState('all')
   const [focusPipe, setFocusPipe] = useState(null)
+  const [view, setView] = useState('investigation')
+  const [runsState, setRunsState] = useState('unknown')
+  const evaluating = view === 'evaluation'
 
   async function loadRuns() {
     try {
       const response = await fetch(`${API}/api/runs?limit=6`)
-      if (!response.ok) return
-      const payload = await response.json()
-      setRuns(payload.runs || [])
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setRuns([])
+        setRunsState('unavailable')
+        return
+      }
+      const next = payload.runs || []
+      setRuns(next)
+      setRunsState(next.length ? 'ready' : 'empty')
     } catch {
-      /* Recent runs are secondary to the live investigation. */
+      setRuns([])
+      setRunsState('unavailable')
     }
   }
 
@@ -156,6 +166,8 @@ export default function App() {
       }
     } catch (err) {
       setOnline(false)
+      setRuns([])
+      setRunsState('offline')
       setError(`Backend unavailable (${API}). Start FastAPI, then reload. ${err.message || ''}`.trim())
       setLoading(false)
       return
@@ -225,14 +237,17 @@ export default function App() {
           .addClass('sensor')
       }
       for (const candidate of result.candidates || []) {
-        if (candidate.rank <= 5 && !candidate.is_ground_truth) {
+        const knownLeak = view === 'evaluation' && candidate.is_ground_truth
+        if (candidate.rank <= 5 && !knownLeak) {
           edgesNamed(cy, candidate.pipe_id).addClass('candidate')
         }
       }
-      if (result.leak_pipe) edgesNamed(cy, result.leak_pipe).addClass('ground-truth')
+      if (view === 'evaluation' && result.leak_pipe) {
+        edgesNamed(cy, result.leak_pipe).addClass('ground-truth')
+      }
       if (focusPipe) edgesNamed(cy, focusPipe).addClass('focus')
     })
-  }, [result, network, focusPipe])
+  }, [result, network, focusPipe, view])
 
   function fitMap() {
     cyRef.current?.fit(undefined, 28)
@@ -342,7 +357,7 @@ export default function App() {
             type="number"
             min="0.00001"
             max="0.01"
-            step="0.0001"
+            step="any"
             value={leakArea}
             onChange={(event) => setLeakArea(event.target.value)}
           />
@@ -366,6 +381,14 @@ export default function App() {
           <div className="panelhead">
             <h2><Network size={17} /> Network map</h2>
             <div className="actions">
+              <div className="modes" role="group" aria-label="Result view">
+                <button type="button" aria-pressed={view === 'investigation'} onClick={() => setView('investigation')}>
+                  Investigation
+                </button>
+                <button type="button" aria-pressed={view === 'evaluation'} onClick={() => setView('evaluation')}>
+                  Evaluation
+                </button>
+              </div>
               <button type="button" className="refresh" onClick={fitMap}>Fit</button>
               <button type="button" className="refresh" onClick={loadNetwork} disabled={loading} aria-label="Reload network">
                 <RefreshCw size={15} />
@@ -373,9 +396,11 @@ export default function App() {
             </div>
           </div>
           <p className="muted">
-            {result
-              ? 'Red is the scenario leak you configured. Gold pipes are the five lowest-RMSE candidates. Teal nodes are virtual sensors.'
-              : 'Net3 model coordinates, drawn with north up. Not a GPS map.'}
+            {result && evaluating
+              ? 'Evaluation view. Red is the scenario leak. Gold pipes are the five lowest-RMSE candidates that are not that leak. Teal nodes are virtual sensors.'
+              : result
+                ? 'Investigation view. Gold pipes are the five lowest-RMSE candidates. Teal nodes are virtual sensors. The scenario leak is not marked.'
+                : 'Net3 model coordinates, drawn with north up. Not a GPS map.'}
           </p>
           <div className="mapwrap">
             <div className="map" ref={mapRef} />
@@ -386,14 +411,14 @@ export default function App() {
           <div className="legend">
             <span><i className="swatch sensor" /> Virtual sensors</span>
             <span><i className="swatch candidate" /> Lowest RMSE</span>
-            <span><i className="swatch leak" /> Scenario leak</span>
+            {evaluating && <span><i className="swatch leak" /> Scenario leak</span>}
           </div>
         </div>
 
         <div className="side">
           <div className="panel">
             <div className="panelhead">
-              <h2><Activity size={17} /> Investigation summary</h2>
+              <h2><Activity size={17} /> {evaluating ? 'Evaluation summary' : 'Investigation summary'}</h2>
             </div>
             {running && <div className="empty">Solving the baseline, the scenario leak, and each candidate pipe.</div>}
             {!running && !result && <div className="empty">Run a scenario to show pressure readings and pipe rankings.</div>}
@@ -402,25 +427,29 @@ export default function App() {
                 <div className="success" role="status">
                   Simulation finished in {result.elapsed_seconds}s. Controlled WNTR demonstration, not field validation.
                 </div>
-                <div>
-                  <small>Scenario leak</small>
-                  <b>Pipe {result.leak_pipe}</b>
-                  <small>Hidden from the ranker</small>
-                </div>
+                {evaluating && (
+                  <div>
+                    <small>Scenario leak</small>
+                    <b>Pipe {result.leak_pipe}</b>
+                    <small>Hidden from the ranker</small>
+                  </div>
+                )}
                 <div>
                   <small>Candidates ranked</small>
                   <b>{result.candidate_count}</b>
                   <small>{result.candidate_selection === 'all_pipes' ? 'Every Net3 pipe' : 'Spatial sample'}</small>
                 </div>
-                <div>
-                  <small>Post-hoc scenario rank</small>
-                  <b>{result.actual_pipe_rank ? `#${result.actual_pipe_rank}` : 'Not ranked'}</b>
-                  <small>
-                    {result.true_pipe_in_candidate_set
-                      ? 'Scored after sorting'
-                      : 'Not inserted into the candidate set'}
-                  </small>
-                </div>
+                {evaluating && (
+                  <div>
+                    <small>Post-hoc scenario rank</small>
+                    <b>{result.actual_pipe_rank ? `#${result.actual_pipe_rank}` : 'Not ranked'}</b>
+                    <small>
+                      {result.true_pipe_in_candidate_set
+                        ? 'Scored after sorting'
+                        : 'Not inserted into the candidate set'}
+                    </small>
+                  </div>
+                )}
                 <div className="accent">
                   <small>Lowest RMSE</small>
                   <b>{top ? `Pipe ${top.pipe_id}` : '—'}</b>
@@ -469,8 +498,12 @@ export default function App() {
       <section className="panel ranking">
         <div className="panelhead">
           <div>
-            <h2><Activity size={17} /> Candidate pipe ranking</h2>
-            <p className="muted">RMSE of the sensor pressure-change vector. Lower means a closer hydraulic match.</p>
+            <h2><Activity size={17} /> {evaluating ? 'Evaluation ranking' : 'Candidate pipe ranking'}</h2>
+            <p className="muted">
+              {evaluating
+                ? 'RMSE of the sensor pressure-change vector, with the scenario leak labeled after sorting. Lower means a closer hydraulic match. Not a probability.'
+                : 'RMSE of the sensor pressure-change vector. Lower means a closer hydraulic match. Not a probability. The scenario leak is not labeled in this view.'}
+            </p>
           </div>
           {result && (
             <span className="badge">{result.candidates.length} shown / {result.candidate_count} ranked</span>
@@ -490,17 +523,18 @@ export default function App() {
                   <th>Pipe</th>
                   <th>RMSE</th>
                   <th>Match</th>
-                  <th>Scenario leak</th>
+                  {evaluating && <th>Scenario leak</th>}
                 </tr>
               </thead>
               <tbody>
                 {result.candidates.map((candidate) => {
                   const width = worstError > 0 ? (candidate.matching_error / worstError) * 100 : 0
+                  const markedLeak = evaluating && candidate.is_ground_truth
                   return (
                     <tr
                       key={candidate.pipe_id}
                       data-pipe={candidate.pipe_id}
-                      className={candidate.is_ground_truth ? 'scenario' : candidate.rank <= 5 ? 'top' : ''}
+                      className={markedLeak ? 'scenario' : candidate.rank <= 5 ? 'top' : ''}
                       onClick={() => showPipe(candidate.pipe_id)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' || event.key === ' ') {
@@ -518,13 +552,15 @@ export default function App() {
                           <div className="bar gold" style={{ width: `${width}%` }} />
                         </div>
                       </td>
-                      <td>
-                        {candidate.is_ground_truth
-                          ? <span className="tag red">Simulated leak</span>
-                          : candidate.rank <= 5
-                            ? <span className="tag yellow">Closest signature</span>
-                            : '—'}
-                      </td>
+                      {evaluating && (
+                        <td>
+                          {candidate.is_ground_truth
+                            ? <span className="tag red">Simulated leak</span>
+                            : candidate.rank <= 5
+                              ? <span className="tag yellow">Closest signature</span>
+                              : '—'}
+                        </td>
+                      )}
                     </tr>
                   )
                 })}
@@ -547,14 +583,19 @@ export default function App() {
         <div className="panelhead">
           <h2><Activity size={17} /> Saved runs</h2>
         </div>
-        {runs.length === 0 && <div className="empty small">Completed simulations are stored in MongoDB and listed here.</div>}
+        {runsState === 'offline' && <div className="empty small">Run history is unavailable until the backend is reachable.</div>}
+        {runsState === 'unavailable' && <div className="empty small">MongoDB is unavailable, so saved runs cannot be listed.</div>}
+        {runsState === 'empty' && <div className="empty small">No completed simulations are stored yet.</div>}
+        {(runsState === 'unknown' && runs.length === 0) && <div className="empty small">Completed simulations are stored in MongoDB and listed here.</div>}
         {runs.length > 0 && (
-          <div className="runs">
+          <div className={evaluating ? 'runs' : 'runs investigation'}>
             {runs.map((run) => (
               <div className="run" key={run.id}>
-                <b>#{run.id} · Pipe {run.leak_pipe}</b>
+                <b>{evaluating ? `#${run.id} · Pipe ${run.leak_pipe}` : `#${run.id}`}</b>
                 <span>{run.candidate_count} ranked</span>
-                <span>{run.actual_pipe_rank ? `scenario rank #${run.actual_pipe_rank}` : 'scenario not ranked'}</span>
+                {evaluating && (
+                  <span>{run.actual_pipe_rank ? `scenario rank #${run.actual_pipe_rank}` : 'scenario not ranked'}</span>
+                )}
                 <span className="muted">{run.created_at} UTC</span>
               </div>
             ))}

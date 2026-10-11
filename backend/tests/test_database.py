@@ -1,8 +1,11 @@
 import json
 import os
 import sys
+import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 
@@ -35,6 +38,15 @@ class DatabaseTests(unittest.TestCase):
     def test_non_finite_numbers_are_rejected(self):
         with self.assertRaises(database.DatabaseError):
             database.to_bson({"value": float("nan")})
+        with self.assertRaises(database.DatabaseError):
+            database.to_bson({"value": float("inf")})
+
+    def test_datetimes_and_nested_lists_stay_bson_safe(self):
+        moment = datetime(2026, 10, 11, 8, 0, tzinfo=timezone.utc)
+        clean = database.to_bson({"when": moment, "rows": [{"delta": np.float64(1.5)}]})
+        self.assertEqual(clean["when"], moment)
+        self.assertEqual(clean["rows"], [{"delta": 1.5}])
+        json.dumps({key: value for key, value in clean.items() if key != "when"})
 
     def test_unconfigured_database_is_reported_without_pretending_success(self):
         previous = os.environ.pop("MONGODB_URI", None)
@@ -94,6 +106,117 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(saved["evaluation"]["leak_pipe"], "329")
         self.assertNotIn("is_ground_truth", saved["predictions"][0])
         self.assertIn("created_at_desc", database.collection().indexes)
+
+    def test_database_name_prefers_mongodb_database(self):
+        previous_database = os.environ.get("MONGODB_DATABASE")
+        previous_db = os.environ.get("MONGODB_DB")
+        os.environ["MONGODB_DATABASE"] = "focalors_named"
+        os.environ["MONGODB_DB"] = "other_name"
+        try:
+            self.assertEqual(database.db_name(), "focalors_named")
+            os.environ.pop("MONGODB_DATABASE")
+            self.assertEqual(database.db_name(), "other_name")
+            os.environ.pop("MONGODB_DB")
+            self.assertEqual(database.db_name(), "focalors")
+        finally:
+            if previous_database is None:
+                os.environ.pop("MONGODB_DATABASE", None)
+            else:
+                os.environ["MONGODB_DATABASE"] = previous_database
+            if previous_db is None:
+                os.environ.pop("MONGODB_DB", None)
+            else:
+                os.environ["MONGODB_DB"] = previous_db
+
+    def test_check_connection_matches_ping_and_hides_configuration_details(self):
+        previous = os.environ.pop("MONGODB_URI", None)
+        database.reset_client()
+        try:
+            report = database.check_connection()
+            self.assertEqual(report, database.ping())
+            self.assertEqual(report["status"], "unavailable")
+            self.assertFalse(report["configured"])
+            self.assertNotIn("mongodb+srv://", json.dumps(report))
+        finally:
+            if previous is not None:
+                os.environ["MONGODB_URI"] = previous
+
+    def test_check_connection_reports_failure_without_credentials(self):
+        """DownClient is a test double. This does not contact Atlas."""
+        database.install_client(DownClient())
+        report = database.check_connection()
+        self.assertEqual(report["status"], "unavailable")
+        self.assertTrue(report["configured"])
+        self.assertEqual(report["detail"], "Could not reach MongoDB.")
+        self.assertNotIn("secret", json.dumps(report))
+        self.assertNotIn("mongodb+srv", json.dumps(report))
+
+    def test_recent_runs_are_sorted_newest_first_and_limit_is_validated(self):
+        """Inserts plain documents into the in-memory double. This does not contact Atlas."""
+        database.install_client(MemoryClient())
+        collection = database.collection()
+        collection.insert_one({
+            "created_at": datetime(2024, 1, 1, tzinfo=timezone.utc),
+            "status": "completed",
+            "candidate_count": 2,
+            "evaluation": {"leak_pipe": "older", "actual_pipe_rank": 2},
+            "configuration": {"leak_area_m2": 0.0001},
+            "predictions": [{"pipe_id": "10", "matching_error": 0.2, "rank": 1}],
+        })
+        collection.insert_one({
+            "created_at": datetime(2025, 6, 1, tzinfo=timezone.utc),
+            "status": "completed",
+            "candidate_count": 3,
+            "evaluation": {"leak_pipe": "newer", "actual_pipe_rank": 1},
+            "configuration": {"leak_area_m2": 0.0001},
+            "predictions": [{"pipe_id": "20", "matching_error": 0.1, "rank": 1}],
+        })
+        runs = database.recent_runs(1)
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(runs[0]["leak_pipe"], "newer")
+        self.assertEqual(runs[0]["created_at"], "2025-06-01 00:00:00")
+        self.assertNotIn("is_ground_truth", collection.documents[-1]["predictions"][0])
+        ordered = database.recent_runs(20)
+        self.assertEqual([item["leak_pipe"] for item in ordered], ["newer", "older"])
+        with self.assertRaises(ValueError):
+            database.recent_runs(0)
+        with self.assertRaises(ValueError):
+            database.recent_runs(101)
+
+    def test_naive_utc_timestamps_are_not_shifted_to_local_time(self):
+        """PyMongo returns naive UTC datetimes unless the client is timezone-aware."""
+        database.install_client(MemoryClient())
+        database.collection().insert_one({
+            "created_at": datetime(2025, 6, 1, 12, 0, 0),
+            "status": "completed",
+            "candidate_count": 1,
+            "evaluation": {"leak_pipe": "329", "actual_pipe_rank": 1},
+            "configuration": {"leak_area_m2": 0.0001},
+            "predictions": [{"pipe_id": "329", "matching_error": 0.0, "rank": 1}],
+        })
+        runs = database.recent_runs(1)
+        self.assertEqual(runs[0]["created_at"], "2025-06-01 12:00:00")
+
+    def test_env_file_is_loaded_from_the_module_directory(self):
+        recorded = []
+
+        def capture(path, override=False):
+            recorded.append((Path(path).resolve(), override))
+            return False
+
+        previous = os.getcwd()
+        with tempfile.TemporaryDirectory() as directory:
+            os.chdir(directory)
+            try:
+                with patch("dotenv.load_dotenv", side_effect=capture):
+                    database.load_env()
+            finally:
+                os.chdir(previous)
+        backend_env = Path(database.__file__).resolve().parent / ".env"
+        root_env = backend_env.parent.parent / ".env"
+        self.assertEqual(recorded[0], (backend_env.resolve(), False))
+        self.assertEqual(recorded[1], (root_env.resolve(), False))
+        self.assertNotEqual(recorded[0][0].parent, Path(directory).resolve())
 
     def test_atlas_ping_when_credentials_are_configured(self):
         uri = os.environ.get("MONGODB_URI", "").strip()

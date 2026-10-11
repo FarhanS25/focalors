@@ -129,6 +129,44 @@ class ApiSmokeTests(unittest.TestCase):
         self.assertNotIn("secret", response.text)
         self.assertNotIn("traceback", response.text.lower())
 
+    def test_health_stays_available_when_mongodb_is_not(self):
+        original = main.check_connection
+
+        def unavailable():
+            return {
+                "status": "unavailable",
+                "engine": "mongodb",
+                "configured": False,
+                "detail": "MONGODB_URI is not set.",
+            }
+
+        main.check_connection = unavailable
+        try:
+            response = self.client.get("/api/health")
+        finally:
+            main.check_connection = original
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["status"], "degraded")
+        self.assertEqual(body["service"], "FOCALORS API")
+        self.assertEqual(body["database"]["status"], "unavailable")
+        self.assertNotIn("mongodb+srv", response.text)
+
+    def test_history_failure_is_not_reported_as_an_empty_list(self):
+        def fail(limit=20):
+            raise DatabaseUnavailableError("Could not read saved runs.")
+
+        original = main.recent_runs
+        main.recent_runs = fail
+        try:
+            response = self.client.get("/api/runs")
+        finally:
+            main.recent_runs = original
+        self.assertEqual(response.status_code, 503)
+        self.assertNotIn("runs", response.json())
+        self.assertNotIn("secret", response.text)
+        self.assertNotIn("traceback", response.text.lower())
+
 
 if __name__ == "__main__":
     unittest.main()
