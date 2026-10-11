@@ -16,3 +16,5 @@ backend/.env
 *.sqlite
 *.sqlite3
 backend/focalors.db
+.env
+backend/.env
