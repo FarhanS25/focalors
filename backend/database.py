@@ -34,20 +34,45 @@ class DatabaseUnavailableError(DatabaseError):
     pass
 
 
+def _apply_env_file(path):
+    """Fill blank environment names from one env file.
+
+    A non-empty process variable wins. A blank one does not hide the file.
+    Values are not shell-expanded, so a ``$`` in a password stays literal.
+    The path is resolved from the given file, not from the process cwd.
+    """
+    from dotenv import dotenv_values
+
+    file_path = Path(path)
+    if not file_path.is_file():
+        return False
+    parsed = dotenv_values(file_path, interpolate=False, encoding="utf-8-sig")
+    applied = False
+    for key, value in parsed.items():
+        if not key or value is None or not str(value).strip():
+            continue
+        if os.environ.get(key, "").strip():
+            continue
+        os.environ[key] = str(value).strip()
+        applied = True
+    return applied
+
+
 def load_env():
     """Load env files from this module's directory, not from the process cwd.
 
-    An environment variable already set in the shell wins. ``backend/.env``
-    then fills anything still missing, and a repository-root ``.env`` fills
-    only names that neither of those provided.
+    An environment variable already set to a non-empty value wins.
+    ``backend/.env`` then fills anything still blank, and a repository-root
+    ``.env`` fills only names that neither of those provided.
     """
     try:
-        from dotenv import load_dotenv
+        import dotenv  # noqa: F401
     except ImportError:
+        logger.warning("python-dotenv is not installed, so .env files were not loaded.")
         return
     backend_dir = Path(__file__).resolve().parent
-    load_dotenv(backend_dir / ".env", override=False)
-    load_dotenv(backend_dir.parent / ".env", override=False)
+    _apply_env_file(backend_dir / ".env")
+    _apply_env_file(backend_dir.parent / ".env")
 
 
 def mongodb_uri():

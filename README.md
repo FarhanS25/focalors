@@ -8,7 +8,7 @@ The leak ranker compares pressure-change signatures. It does not receive the sce
 
 Completed runs are stored in one collection, `simulation_runs`. Sensor readings and ranked pipes are nested in that document. The scenario leak id is stored under `evaluation`, separate from the ranked predictions. The ranker does not read the database.
 
-The API reads `MONGODB_URI` from the environment. On startup it loads `backend/.env` using the path of `backend/database.py`, so the terminal's current directory does not matter. A repository-root `.env` fills only names that are still unset. A variable already exported in the shell wins over both files. Restart the API after changing either file.
+The API reads `MONGODB_URI` from the environment. On startup it loads `backend/.env` using the path of `backend/database.py`, so the terminal's current directory does not matter. A repository-root `.env` fills only names that are still blank. A non-empty variable already exported in the shell wins over both files. A blank `MONGODB_URI` in the shell does not hide the file. Values are read literally, including a `$` in a password. The same placeholders are in `.env.example` and `backend/.env.example`. Restart the API after changing either file.
 
 Do these steps in the Atlas website. The repository does not contain a cluster or a password.
 

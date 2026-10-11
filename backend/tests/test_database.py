@@ -200,23 +200,51 @@ class DatabaseTests(unittest.TestCase):
     def test_env_file_is_loaded_from_the_module_directory(self):
         recorded = []
 
-        def capture(path, override=False):
-            recorded.append((Path(path).resolve(), override))
+        def capture(path):
+            recorded.append(Path(path).resolve())
             return False
 
         previous = os.getcwd()
         with tempfile.TemporaryDirectory() as directory:
             os.chdir(directory)
             try:
-                with patch("dotenv.load_dotenv", side_effect=capture):
+                with patch.object(database, "_apply_env_file", side_effect=capture):
                     database.load_env()
             finally:
                 os.chdir(previous)
         backend_env = Path(database.__file__).resolve().parent / ".env"
         root_env = backend_env.parent.parent / ".env"
-        self.assertEqual(recorded[0], (backend_env.resolve(), False))
-        self.assertEqual(recorded[1], (root_env.resolve(), False))
-        self.assertNotEqual(recorded[0][0].parent, Path(directory).resolve())
+        self.assertEqual(recorded, [backend_env.resolve(), root_env.resolve()])
+        self.assertNotEqual(recorded[0].parent, Path(directory).resolve())
+
+    def test_blank_process_variable_does_not_hide_the_env_file(self):
+        """Uses a placeholder URI. This does not contact Atlas."""
+        placeholder = "mongodb+srv://user:p$assword@cluster.example/focalors"
+        previous_uri = os.environ.get("MONGODB_URI")
+        previous_database = os.environ.get("MONGODB_DATABASE")
+        with tempfile.TemporaryDirectory() as directory:
+            env_file = Path(directory) / ".env"
+            env_file.write_bytes(
+                ("\ufeffMONGODB_URI=" + placeholder + "\nMONGODB_DATABASE=focalors_file\n").encode("utf-8")
+            )
+            os.environ["MONGODB_URI"] = ""
+            os.environ["MONGODB_DATABASE"] = "   "
+            try:
+                self.assertTrue(database._apply_env_file(env_file))
+                self.assertEqual(os.environ.get("MONGODB_URI"), placeholder)
+                self.assertEqual(os.environ.get("MONGODB_DATABASE"), "focalors_file")
+                os.environ["MONGODB_URI"] = "already-set"
+                self.assertFalse(database._apply_env_file(env_file))
+                self.assertEqual(os.environ.get("MONGODB_URI"), "already-set")
+            finally:
+                if previous_uri is None:
+                    os.environ.pop("MONGODB_URI", None)
+                else:
+                    os.environ["MONGODB_URI"] = previous_uri
+                if previous_database is None:
+                    os.environ.pop("MONGODB_DATABASE", None)
+                else:
+                    os.environ["MONGODB_DATABASE"] = previous_database
 
     def test_reset_client_closes_the_existing_client_and_ignores_a_missing_one(self):
         """Uses a fake client. This does not contact Atlas."""
