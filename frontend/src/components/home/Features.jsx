@@ -70,12 +70,12 @@ function Features() {
   return (
     <section
       id="features"
-      className="relative isolate overflow-hidden bg-[#172B36] py-24 text-[#F1F5F7] sm:py-32"
+      className="relative isolate overflow-hidden bg-transparent py-24 text-[var(--text)] sm:py-32"
     >
       {/* Subtle ambient background detail */}
       <motion.div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-40 top-0 -z-10 h-[500px] w-[500px] rounded-full bg-sky-400/[0.07] blur-[130px]"
+        className="pointer-events-none absolute -right-40 top-0 -z-10 h-[500px] w-[500px] rounded-full bg-[color-mix(in_srgb,var(--teal)_8%,transparent)] blur-[130px]"
         animate={
           shouldReduceMotion
             ? undefined
@@ -92,7 +92,7 @@ function Features() {
         }}
       />
 
-      <div className="mx-auto max-w-7xl px-6 lg:px-10">
+      <div className="home-wrap">
         {/* Section heading */}
         <div className="grid gap-8 border-b border-white/15 pb-12 lg:grid-cols-[1.2fr_0.8fr] lg:items-end lg:pb-14">
           <motion.div
@@ -104,21 +104,21 @@ function Features() {
           >
             <div className="mb-6 flex items-center gap-3">
               <motion.span
-                className="h-[2px] w-9 bg-[#00B8F0]"
+                className="h-[2px] w-9 bg-[var(--teal)]"
                 initial={{ width: shouldReduceMotion ? 36 : 0 }}
                 whileInView={{ width: 36 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.7, delay: 0.15 }}
               />
 
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-300">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--teal)]">
                 A different way to investigate
               </p>
             </div>
 
-            <h2 className="max-w-3xl text-4xl font-semibold leading-[1.08] tracking-[-0.045em] sm:text-5xl lg:text-6xl">
+            <h2 className="home-section-title max-w-3xl">
               Complex networks.
-              <span className="mt-2 block text-[#91A9B8]">
+              <span className="mt-2 block text-[var(--muted)]">
                 Clearer decisions.
               </span>
             </h2>
@@ -132,15 +132,15 @@ function Features() {
             viewport={revealViewport}
             transition={{ ...revealTransition, delay: 0.15 }}
           >
-            <p className="text-base leading-8 text-[#C0CDD4]">
+            <p className="text-base leading-8 text-[var(--muted)]">
               Finding a possible leak is an investigation, not a guess. FOCALORS
               brings location information and hydraulic evidence together to
               guide the next step.
             </p>
 
-            <div className="mt-6 flex items-center gap-3 text-xs font-medium uppercase tracking-[0.14em] text-[#91A9B8]">
+            <div className="mt-6 flex items-center gap-3 text-xs font-medium uppercase tracking-[0.14em] text-[var(--muted)]">
               <motion.span
-                className="h-2 w-2 rounded-full bg-[#00B8F0]"
+                className="h-2 w-2 rounded-full bg-[var(--teal)]"
                 animate={
                   shouldReduceMotion
                     ? undefined
@@ -164,7 +164,7 @@ function Features() {
         <div className="grid gap-6 pt-10 lg:grid-cols-[1.12fr_0.88fr] lg:pt-12">
           {/* Main feature */}
           <motion.article
-            className="group flex min-w-0 flex-col overflow-hidden border border-white/10 bg-[#203945] transition-colors duration-300 hover:border-sky-400/50"
+            className="group flex min-w-0 flex-col overflow-hidden"
             variants={reveal}
             initial="hidden"
             whileInView="visible"
@@ -190,17 +190,17 @@ function Features() {
                 whileHover={shouldReduceMotion ? undefined : { scale: 1.055 }}
               />
 
-              <div className="absolute inset-0 bg-gradient-to-t from-[#10232E]/80 via-[#10232E]/10 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg)]/80 via-[var(--bg)]/10 to-transparent" />
 
               <div className="absolute left-5 top-5">
                 <motion.span
-                  className="inline-flex items-center gap-2 border border-white/20 bg-[#172B36]/80 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.13em] text-white backdrop-blur-sm"
+                  className="inline-flex items-center gap-2 border border-white/20 bg-[var(--panel)] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.13em] text-white backdrop-blur-sm"
                   initial={{ opacity: 0, x: -12 }}
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.55, delay: 0.35 }}
                 >
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#00B8F0]" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--teal)]" />
                   {features[0].label}
                 </motion.span>
               </div>
@@ -216,7 +216,7 @@ function Features() {
               </motion.span>
 
               <div className="absolute bottom-5 left-5 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.15em] text-white/80">
-                <span className="h-px w-7 bg-[#00B8F0]" />
+                <span className="h-px w-7 bg-[var(--teal)]" />
                 {features[0].category}
               </div>
             </div>
@@ -231,28 +231,28 @@ function Features() {
                   }
                   transition={{ type: "spring", stiffness: 300, damping: 15 }}
                 >
-                  <MapPin size={20} className="text-[#00B8F0]" />
+                  <MapPin size={20} className="text-[var(--teal)]" />
                 </motion.div>
 
-                <span className="text-xs font-medium uppercase tracking-[0.14em] text-[#91A9B8]">
+                <span className="text-xs font-medium uppercase tracking-[0.14em] text-[var(--muted)]">
                   Feature / 01
                 </span>
               </div>
 
-              <h3 className="text-3xl font-semibold leading-tight tracking-[-0.04em] sm:text-4xl">
+              <h3 className="home-card-title">
                 {features[0].title}
-                <span className="mt-1 block text-[#91A9B8]">
+                <span className="mt-1 block text-[var(--muted)]">
                   {features[0].emphasis}
                 </span>
               </h3>
 
-              <p className="mt-5 max-w-lg text-sm leading-7 text-[#C0CDD4] sm:text-base">
+              <p className="mt-5 max-w-lg text-sm leading-7 text-[var(--muted)] sm:text-base">
                 {features[0].description}
               </p>
 
-              <div className="mt-8 flex items-center gap-3 text-xs font-medium uppercase tracking-[0.13em] text-[#91A9B8]">
+              <div className="mt-8 flex items-center gap-3 text-xs font-medium uppercase tracking-[0.13em] text-[var(--muted)]">
                 <motion.span
-                  className="h-[2px] bg-[#00B8F0]"
+                  className="h-[2px] bg-[var(--teal)]"
                   initial={{ width: shouldReduceMotion ? 32 : 0 }}
                   whileInView={{ width: 32 }}
                   viewport={{ once: true }}
@@ -271,7 +271,7 @@ function Features() {
               return (
                 <motion.article
                   key={feature.number}
-                  className="group grid min-w-0 overflow-hidden border border-white/10 bg-[#203945] transition-colors duration-300 hover:border-sky-400/50 sm:grid-cols-[0.8fr_1fr]"
+                  className="group grid min-w-0 overflow-hidden sm:grid-cols-[0.8fr_1fr]"
                   variants={reveal}
                   initial="hidden"
                   whileInView="visible"
@@ -302,7 +302,7 @@ function Features() {
                       }
                     />
 
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#10232E]/55 via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg)]/55 via-transparent to-transparent" />
 
                     <motion.span
                       className="absolute bottom-4 left-4 text-5xl font-light leading-none tracking-[-0.07em] text-white"
@@ -320,12 +320,12 @@ function Features() {
 
                   <div className="flex min-w-0 flex-col p-5 sm:p-6 lg:p-7">
                     <div className="flex items-center justify-between gap-3 border-b border-white/15 pb-4">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#91A9B8]">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
                         {feature.label}
                       </span>
 
                       <motion.div
-                        className="shrink-0 text-[#00B8F0]"
+                        className="shrink-0 text-[var(--teal)]"
                         whileHover={
                           shouldReduceMotion
                             ? undefined
@@ -345,17 +345,17 @@ function Features() {
 
                     <h3 className="mt-5 text-2xl font-semibold leading-tight tracking-[-0.04em]">
                       {feature.title}
-                      <span className="mt-1 block text-[#91A9B8]">
+                      <span className="mt-1 block text-[var(--muted)]">
                         {feature.emphasis}
                       </span>
                     </h3>
 
-                    <p className="mt-4 flex-1 text-sm leading-7 text-[#C0CDD4]">
+                    <p className="mt-4 flex-1 text-sm leading-7 text-[var(--muted)]">
                       {feature.description}
                     </p>
 
                     <div className="mt-6 border-t border-white/15 pt-4">
-                      <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#91A9B8]">
+                      <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--muted)]">
                         {feature.category}
                       </span>
                     </div>
@@ -375,25 +375,25 @@ function Features() {
           viewport={revealViewport}
           transition={{ ...revealTransition, delay: 0.1 }}
         >
-          <p className="max-w-2xl text-sm leading-7 text-[#B4C3CC]">
+          <p className="max-w-2xl text-sm leading-7 text-[var(--muted)]">
             Each measurement adds evidence. When uncertainty remains, the
             investigation continues with a more informed next step.
           </p>
 
           <motion.a
             href="#how-it-works"
-            className="group inline-flex w-fit shrink-0 items-center gap-3 text-sm font-semibold text-white transition-colors hover:text-[#00B8F0]"
+            className="group inline-flex w-fit shrink-0 items-center gap-3 text-sm font-semibold text-white transition-colors hover:text-[var(--teal)]"
             whileHover={shouldReduceMotion ? undefined : { x: 4 }}
             whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
           >
             Explore the process
             <motion.span
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/25 transition-colors group-hover:border-[#00B8F0]"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/25 transition-colors group-hover:border-[var(--teal)]"
               whileHover={
                 shouldReduceMotion
                   ? undefined
                   : {
-                      borderColor: "#00B8F0",
+                      borderColor: "#61e0bf",
                       rotate: 5,
                     }
               }

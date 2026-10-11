@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Droplets, Menu, X } from "lucide-react";
 
 const navLinks = [
   { label: "Home", href: "#home" },
@@ -13,7 +13,7 @@ function Navbar() {
   const [visible, setVisible] = useState(true);
   const [activeSection, setActiveSection] = useState("home");
   const [scrolled, setScrolled] = useState(false);
-  const [lightSection, setLightSection] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const shouldReduceMotion = useReducedMotion();
 
@@ -27,8 +27,9 @@ function Navbar() {
     event.preventDefault();
 
     setVisible(true);
+    setMenuOpen(false);
 
-    const targetPosition = target.getBoundingClientRect().top + window.scrollY;
+    const targetPosition = target.getBoundingClientRect().top + window.scrollY - 88;
 
     window.history.replaceState(null, "", href);
 
@@ -124,32 +125,6 @@ function Navbar() {
     return () => observer.disconnect();
   }, []);
 
-  // Switch navbar colors over the light How It Works section.
-  useEffect(() => {
-    const section = document.getElementById("how-it-works");
-
-    if (!section) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setLightSection(entry.isIntersecting);
-      },
-      {
-        rootMargin: "-76px 0px -75% 0px",
-        threshold: 0,
-      },
-    );
-
-    observer.observe(section);
-
-    return () => observer.disconnect();
-  }, []);
-
-  // Neutral charcoal glass over photographs; light glass over How It Works.
-  const navbarTheme = lightSection
-    ? "border-[#142A36]/10 bg-[#F1F5F7]/95 shadow-md shadow-black/5 backdrop-blur-xl"
-    : "border-white/15 bg-[#101820]/75 shadow-md shadow-black/10 backdrop-blur-xl";
-
   return (
     <motion.header
       initial={shouldReduceMotion ? false : { y: -90, opacity: 0 }}
@@ -161,38 +136,30 @@ function Navbar() {
         duration: shouldReduceMotion ? 0 : 0.35,
         ease: [0.22, 1, 0.36, 1],
       }}
-      className={`fixed left-0 top-0 z-50 w-full border-b transition-colors duration-300 ${navbarTheme}`}
+      className={`home-nav fixed left-0 top-0 z-50 w-full ${scrolled ? "shadow-[0_18px_40px_rgba(0,0,0,0.28)]" : ""}`}
     >
-      <nav className="mx-auto flex h-[76px] max-w-7xl items-center justify-between px-6 lg:px-10">
-        {/* Logo */}
+      <nav className="home-wrap flex h-[76px] items-center justify-between gap-4">
         <motion.a
           href="#home"
           onClick={(event) => handleSmoothScroll(event, "#home")}
           aria-label="FOCALORS home"
-          className="flex shrink-0 items-center"
-          whileHover={shouldReduceMotion ? undefined : { scale: 1.035 }}
-          whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
+          className="home-brand shrink-0"
+          whileHover={shouldReduceMotion ? undefined : { scale: 1.02 }}
+          whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
           transition={{ duration: 0.2 }}
         >
-          <img
-            src="/images/logo.png"
-            alt="FOCALORS"
-            className="w-32 object-contain sm:w-36"
-          />
+          <span className="home-mark" aria-hidden="true">
+            <Droplets size={20} />
+          </span>
+          <span>
+            <b>FOCALORS <small>/ FIELD INTELLIGENCE</small></b>
+            <p>Hydraulic leak investigation</p>
+          </span>
         </motion.a>
 
-        {/* Navigation links */}
-        <div className="hidden items-center gap-6 lg:flex xl:gap-7">
+        <div className={`home-links ${menuOpen ? "is-open" : ""}`}>
           {navLinks.map((link) => {
             const isActive = activeSection === link.href.slice(1);
-
-            const linkColor = lightSection
-              ? isActive
-                ? "text-[#008DB8]"
-                : "text-[#203D4B] hover:text-[#008DB8]"
-              : isActive
-                ? "text-[#38BDF8]"
-                : "text-white/90 hover:text-[#38BDF8]";
 
             return (
               <a
@@ -200,71 +167,28 @@ function Navbar() {
                 href={link.href}
                 onClick={(event) => handleSmoothScroll(event, link.href)}
                 aria-current={isActive ? "location" : undefined}
-                className={`group relative whitespace-nowrap py-2 text-sm font-semibold transition-colors duration-200 ${linkColor}`}
               >
                 {link.label}
-
-                {/* Animated active underline */}
-                <motion.span
-                  className={`absolute -bottom-0.5 left-0 h-[2px] rounded-full ${
-                    lightSection ? "bg-[#008DB8]" : "bg-[#38BDF8]"
-                  }`}
-                  initial={false}
-                  animate={{
-                    width: isActive ? "100%" : "0%",
-                    opacity: isActive ? 1 : 0,
-                  }}
-                  transition={{
-                    duration: shouldReduceMotion ? 0 : 0.25,
-                  }}
-                />
-
-                {/* Hover underline */}
-                {!isActive && (
-                  <span
-                    className={`absolute -bottom-0.5 left-0 h-[2px] w-0 rounded-full transition-all duration-300 group-hover:w-full ${
-                      lightSection ? "bg-[#008DB8]" : "bg-[#38BDF8]"
-                    }`}
-                  />
-                )}
               </a>
             );
           })}
         </div>
 
-        <motion.a
-          href="/investigate"
-          whileHover={shouldReduceMotion ? undefined : { scale: 1.025, y: -1 }}
-          whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
-          transition={{
-            type: "spring",
-            stiffness: 350,
-            damping: 22,
-          }}
-          className={`group relative inline-flex shrink-0 items-center gap-3 overflow-hidden rounded-full border px-4 py-2.5 text-sm font-semibold shadow-lg backdrop-blur-md transition-all duration-300 sm:px-5 sm:py-3 ${
-            lightSection
-              ? "border-[#008DB8]/40 bg-white/80 text-[#142A36] hover:border-[#008DB8] hover:bg-[#00B8F0] hover:text-[#071C2B]"
-              : "border-white/25 bg-white/[0.06] text-white hover:border-[#38BDF8] hover:bg-[#00B8F0] hover:text-[#071C2B]"
-          }`}
-        >
-          {/* Hover sheen */}
-          <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-
-          <span className="relative">Open investigation</span>
-
-          <span
-            className={`relative flex h-7 w-7 items-center justify-center rounded-full transition-colors duration-300 ${
-              lightSection
-                ? "bg-[#008DB8]/10 group-hover:bg-[#071C2B]/10"
-                : "bg-white/10 group-hover:bg-[#071C2B]/10"
-            }`}
+        <div className="flex items-center gap-2">
+          <a className="home-cta" href="/investigate">
+            Open Investigation
+            <ArrowRight size={16} />
+          </a>
+          <button
+            type="button"
+            className="home-menu-button"
+            aria-expanded={menuOpen}
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            onClick={() => setMenuOpen((open) => !open)}
           >
-            <ArrowRight
-              size={16}
-              className="transition-transform duration-300 group-hover:translate-x-1"
-            />
-          </span>
-        </motion.a>
+            {menuOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+        </div>
       </nav>
     </motion.header>
   );

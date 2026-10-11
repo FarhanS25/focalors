@@ -6,6 +6,7 @@ import Hero from "./components/home/Hero";
 import Features from "./components/home/Features";
 import HowItWorks from "./components/home/HowItWorks";
 import Mission from "./components/home/Mission";
+import "./home.css";
 
 const Dashboard = lazy(() => import("./Dashboard.jsx"));
 
@@ -24,12 +25,12 @@ function LandingPage() {
       <ScrollToTop />
       <Navbar />
 
-      <main className="min-h-screen bg-[#071C2B] text-white">
+      <main className="home min-h-screen">
         <Hero />
         <Features />
         <HowItWorks />
 
-        <div className="relative isolate bg-[#071C2B]">
+        <div className="relative isolate">
           <Mission />
           <Footer />
         </div>

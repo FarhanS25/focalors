@@ -76,7 +76,7 @@ function Mission() {
       {/* Minimal gradient behind text only */}
       <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-black/50 via-black/15 to-transparent" />
 
-      <div className="mx-auto max-w-7xl px-6 lg:px-10">
+      <div className="home-wrap">
         <div className="grid items-center gap-14 lg:grid-cols-[1.05fr_0.95fr] lg:gap-20">
           {/* Main content */}
           <motion.div
@@ -98,25 +98,25 @@ function Mission() {
               transition={transition}
             >
               <motion.span
-                className="h-px bg-[#00B8F0]"
+                className="h-px bg-[var(--teal)]"
                 initial={{ width: shouldReduceMotion ? 40 : 0 }}
                 whileInView={{ width: 40 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.7, delay: 0.15 }}
               />
 
-              <span className="text-xs font-bold uppercase tracking-[0.24em] text-[#38BDF8]">
+              <span className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--teal)]">
                 Why FOCALORS
               </span>
             </motion.div>
 
             <motion.h2
-              className="max-w-2xl text-4xl font-semibold leading-[1.12] tracking-tight text-white sm:text-5xl lg:text-6xl"
+              className="home-section-title max-w-2xl text-white"
               variants={reveal}
               transition={transition}
             >
               Finding the signal
-              <span className="block text-[#38BDF8]">beneath the surface.</span>
+              <span className="block text-[var(--teal)]">beneath the surface.</span>
             </motion.h2>
 
             <motion.p
@@ -147,7 +147,7 @@ function Mission() {
             {/* Corner accents */}
             <motion.div
               aria-hidden="true"
-              className="absolute -left-3 -top-3 h-16 w-16 border-l border-t border-[#38BDF8]/70"
+              className="absolute -left-3 -top-3 h-16 w-16 border-l border-t border-[var(--teal)]/70"
               initial={{
                 opacity: 0,
                 x: -8,
@@ -164,7 +164,7 @@ function Mission() {
 
             <motion.div
               aria-hidden="true"
-              className="absolute -bottom-3 -right-3 h-16 w-16 border-b border-r border-[#38BDF8]/70"
+              className="absolute -bottom-3 -right-3 h-16 w-16 border-b border-r border-[var(--teal)]/70"
               initial={{
                 opacity: 0,
                 x: 8,
@@ -207,15 +207,15 @@ function Mission() {
                         ? undefined
                         : {
                             x: -4,
-                            borderColor: "rgba(56, 189, 248, 0.65)",
+                            borderColor: "rgba(97, 224, 191, 0.65)",
                             backgroundColor: "rgba(0, 0, 0, 0.36)",
                           }
                     }
-                    className="group flex gap-5 rounded-xl border border-white/25 bg-black/25 p-5 backdrop-blur-sm transition-colors duration-300 hover:border-[#38BDF8]/50 hover:bg-black/35 sm:p-6"
+                    className="group flex gap-5 rounded-xl border border-white/25 bg-black/25 p-5 backdrop-blur-sm transition-colors duration-300 hover:border-[var(--teal)]/50 hover:bg-black/35 sm:p-6"
                   >
                     {/* Icon container */}
                     <motion.div
-                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[#38BDF8]/40 bg-black/25 text-[#38BDF8] transition-colors duration-300 group-hover:bg-black/40"
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[var(--teal)]/40 bg-black/25 text-[var(--teal)] transition-colors duration-300 group-hover:bg-black/40"
                       whileHover={
                         shouldReduceMotion
                           ? undefined
@@ -240,7 +240,7 @@ function Mission() {
                         </h3>
 
                         <motion.span
-                          className="text-xs font-medium tracking-widest text-[#7DD3FC]"
+                          className="text-xs font-medium tracking-widest text-[var(--gold)]"
                           initial={{ opacity: 0 }}
                           whileInView={{ opacity: 1 }}
                           viewport={{ once: true }}
@@ -274,7 +274,7 @@ function Mission() {
           transition={{ ...transition, delay: 0.1 }}
         >
           <motion.div
-            className="shrink-0 text-[#38BDF8]"
+            className="shrink-0 text-[var(--teal)]"
             animate={
               shouldReduceMotion
                 ? undefined

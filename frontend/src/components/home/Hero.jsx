@@ -59,7 +59,7 @@ function Hero() {
     <section
       id="home"
       ref={heroRef}
-      className="relative flex min-h-screen items-center overflow-hidden bg-[#071C2B]"
+      className="relative flex min-h-screen items-center overflow-hidden bg-[var(--bg)]"
     >
       {/* Cinematic background with scroll-linked movement */}
       <motion.div
@@ -87,13 +87,13 @@ function Hero() {
       </motion.div>
 
       {/* Cinematic contrast */}
-      <div className="absolute inset-0 bg-gradient-to-r from-[#04111B]/85 via-[#071C2B]/45 to-[#071C2B]/10" />
-      <div className="absolute inset-0 bg-gradient-to-t from-[#071C2B]/80 via-transparent to-[#071C2B]/20" />
+      <div className="absolute inset-0 bg-gradient-to-r from-[var(--bg)]/90 via-[var(--bg)]/60 to-[var(--bg)]/15" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg)]/88 via-transparent to-[var(--bg)]/25" />
 
       {/* Atmospheric light */}
       <motion.div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-40 top-1/4 h-[480px] w-[480px] rounded-full bg-sky-400/[0.08] blur-[120px]"
+        className="pointer-events-none absolute -right-40 top-1/4 h-[480px] w-[480px] rounded-full bg-[color-mix(in_srgb,var(--teal)_10%,transparent)] blur-[120px]"
         animate={
           shouldReduceMotion
             ? undefined
@@ -113,7 +113,7 @@ function Hero() {
       {/* Fine animated light line */}
       <motion.div
         aria-hidden="true"
-        className="pointer-events-none absolute left-0 top-[30%] h-px w-1/2 origin-left bg-gradient-to-r from-transparent via-sky-300/50 to-transparent"
+        className="pointer-events-none absolute left-0 top-[30%] h-px w-1/2 origin-left bg-gradient-to-r from-transparent via-[var(--teal)]/45 to-transparent"
         initial={{ scaleX: 0, opacity: 0 }}
         animate={{ scaleX: 1, opacity: 1 }}
         transition={{
@@ -123,7 +123,7 @@ function Hero() {
         }}
       />
 
-      <div className="relative z-10 mx-auto w-full max-w-7xl px-6 pb-24 pt-32 lg:px-10">
+      <div className="home-wrap relative z-10 pb-24 pt-32">
         <motion.div
           variants={sequence}
           initial="hidden"
@@ -133,11 +133,11 @@ function Hero() {
           {/* Status label */}
           <motion.div
             variants={entrance}
-            className="mb-9 inline-flex items-center gap-3 rounded-full border border-white/20 bg-[#071C2B]/35 px-4 py-2.5 backdrop-blur-xl"
+            className="home-status"
           >
             <span className="relative flex h-2.5 w-2.5">
               <motion.span
-                className="absolute inset-0 rounded-full bg-sky-400"
+                className="absolute inset-0 rounded-full bg-[var(--teal)]"
                 animate={
                   shouldReduceMotion
                     ? undefined
@@ -152,34 +152,27 @@ function Hero() {
                   ease: "easeOut",
                 }}
               />
-              <span className="relative h-2.5 w-2.5 rounded-full bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.8)]" />
+              <span className="relative h-2.5 w-2.5 rounded-full bg-[var(--teal)] shadow-[0_0_12px_rgba(97,224,191,0.8)]" />
             </span>
 
-            <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/90 sm:text-xs">
-              Intelligent Water Network Investigation
+            <span className="home-status-label">
+              Intelligent water network investigation
             </span>
 
-            <Waves size={14} className="text-sky-300" />
+            <Waves size={14} className="text-[var(--teal)]" />
           </motion.div>
 
           {/* Headline */}
           <div className="overflow-hidden">
             <motion.h1
               variants={entrance}
-              className="text-5xl font-semibold leading-[1.06] tracking-[-0.045em] text-white sm:text-6xl lg:text-8xl"
+              className="home-display text-[var(--text)]"
             >
               Every drop
               <br />
               tells a story.
+              <em className="home-accent mt-2 block">Find the leak.</em>
             </motion.h1>
-          </div>
-
-          <div className="mt-1 overflow-hidden">
-            <motion.div variants={entrance}>
-              <span className="block text-5xl font-semibold leading-[1.1] tracking-[-0.045em] text-sky-400 sm:text-6xl lg:text-8xl">
-                Find the leak.
-              </span>
-            </motion.div>
           </div>
 
           {/* Accent rule */}
@@ -188,7 +181,7 @@ function Hero() {
             className="mt-7 flex items-center gap-3"
           >
             <motion.span
-              className="h-[2px] bg-sky-400"
+              className="h-[2px] bg-[var(--teal)]"
               initial={{ width: 0 }}
               animate={{ width: 56 }}
               transition={{
@@ -214,37 +207,37 @@ function Hero() {
           {/* Actions */}
           <motion.div
             variants={entrance}
-            className="mt-10 flex flex-col gap-4 sm:flex-row"
+            className="mt-10 flex flex-col flex-wrap gap-4 sm:flex-row"
           >
+            <motion.a
+              href="/investigate"
+              whileHover={shouldReduceMotion ? undefined : { y: -3 }}
+              whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
+              className="home-cta"
+            >
+              <span>Open Investigation</span>
+              <ArrowRight
+                size={18}
+                className="transition-transform duration-300 group-hover:translate-x-1"
+              />
+            </motion.a>
+
             <motion.a
               href="#mission"
               whileHover={shouldReduceMotion ? undefined : { y: -3 }}
               whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
-              className="group relative inline-flex items-center justify-center gap-3 overflow-hidden rounded-full bg-sky-400 px-7 py-4 text-sm font-semibold text-[#071C2B] transition-colors hover:bg-sky-300"
+              className="home-cta-secondary"
             >
-              <motion.span
-                aria-hidden="true"
-                className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/35 to-transparent"
-                whileHover={
-                  shouldReduceMotion ? undefined : { x: ["0%", "250%"] }
-                }
-                transition={{ duration: 0.7 }}
-              />
-              <span className="relative">Explore the Platform</span>
-              <ArrowRight
-                size={18}
-                className="relative transition-transform duration-300 group-hover:translate-x-1"
-              />
+              Explore the Platform
             </motion.a>
 
             <motion.a
               href="#how-it-works"
               whileHover={shouldReduceMotion ? undefined : { y: -3 }}
               whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
-              className="inline-flex items-center justify-center gap-3 rounded-full border border-white/30 bg-white/[0.06] px-7 py-4 text-sm font-medium text-white backdrop-blur-md transition-colors hover:border-white/60 hover:bg-white/10"
+              className="home-cta-secondary"
             >
               Discover How It Works
-              <span className="text-sky-300">↘</span>
             </motion.a>
           </motion.div>
 
@@ -258,8 +251,8 @@ function Hero() {
               whileHover={shouldReduceMotion ? undefined : { x: 5 }}
               className="group flex items-start gap-4"
             >
-              <div className="rounded-xl border border-white/15 bg-white/[0.08] p-3 transition-colors duration-300 group-hover:border-sky-400/40 group-hover:bg-sky-400/10">
-                <Activity className="text-sky-400" size={22} />
+              <div className="rounded-xl border border-white/15 bg-white/[0.08] p-3 transition-colors duration-300 group-hover:border-[var(--teal)]/40 group-hover:bg-[var(--teal)]/10">
+                <Activity className="text-[var(--teal)]" size={22} />
               </div>
 
               <div>
@@ -277,8 +270,8 @@ function Hero() {
               whileHover={shouldReduceMotion ? undefined : { x: 5 }}
               className="group flex items-start gap-4"
             >
-              <div className="rounded-xl border border-white/15 bg-white/[0.08] p-3 transition-colors duration-300 group-hover:border-sky-400/40 group-hover:bg-sky-400/10">
-                <ShieldCheck className="text-sky-400" size={22} />
+              <div className="rounded-xl border border-white/15 bg-white/[0.08] p-3 transition-colors duration-300 group-hover:border-[var(--teal)]/40 group-hover:bg-[var(--teal)]/10">
+                <ShieldCheck className="text-[var(--teal)]" size={22} />
               </div>
 
               <div>
@@ -324,7 +317,7 @@ function Hero() {
         </span>
 
         <motion.span
-          className="h-8 w-px origin-top bg-gradient-to-b from-sky-400 to-transparent"
+          className="h-8 w-px origin-top bg-gradient-to-b from-[var(--teal)] to-transparent"
           animate={shouldReduceMotion ? undefined : { scaleY: [1, 0.55, 1] }}
           transition={{
             duration: 1.8,

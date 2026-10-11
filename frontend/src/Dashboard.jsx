@@ -364,7 +364,7 @@ export default function Dashboard() {
         <span className={online === false ? 'pill offline' : 'pill'}>
           {online === false ? '○ BACKEND OFFLINE' : online ? '● SIMULATION MODE' : '○ CHECKING BACKEND'}
         </span>
-        <a className="pill" href="/">Landing page</a>
+        <a className="pill" href="/">Home</a>
       </header>
 
       <section className="hero">
