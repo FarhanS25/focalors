@@ -26,23 +26,8 @@ function App() {
         <Hero />
         <Features />
         <HowItWorks />
-
-        {/* Shared background for Mission and Footer */}
-        <div className="relative isolate overflow-hidden bg-[#071C2B]">
-          <div className="absolute inset-0 -z-10">
-            <img
-              src="/images/mission.jpg"
-              alt=""
-              aria-hidden="true"
-              className="h-full w-full object-cover object-center"
-            />
-          </div>
-
-          <div className="absolute inset-0 -z-10 bg-[#071C2B]/35" />
-
-          <Mission />
-          <Footer />
-        </div>
+        <Mission />
+        <Footer />
       </main>
     </>
   );
