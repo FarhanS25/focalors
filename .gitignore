@@ -6,3 +6,5 @@ node_modules/
 dist/
 .env
 backend/focalors.db
+.env
+backend/.env
