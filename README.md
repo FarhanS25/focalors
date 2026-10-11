@@ -128,4 +128,46 @@ The hydraulic tests run real Net3 simulations, including one full-network search
 - Five virtual sensors are placed by farthest-point sampling on baseline pressures. They are not an optimized or field-installed sensor design.
 - Net3 coordinates and distances are model units, not GPS.
 - Demand is solved as pressure-dependent demand with a 20 m service head so large leaks cannot keep extracting full customer demand at negative pressure. That setting is a modeling choice, not a calibration.
-- Citizen priors, active investigation, sensor noise, model mismatch, and deployment are not implemented.
+- Citizen priors, active investigation, sensor noise, and model mismatch are not implemented.
+
+## AWS deployment
+
+Use one EC2 instance. Nginx serves the built frontend and proxies `/api` to FastAPI on the same machine. MongoDB stays on the existing Atlas cluster. The API does not fall back to SQLite.
+
+This creates a billable instance. Do not launch it until the instance type and region are confirmed. A `t3.medium` (4 GB RAM) in the same region as the Atlas cluster is the practical minimum; WNTR's Net3 search is a CPU-bound Python process, not a Lambda function.
+
+### What you must provide
+
+- An AWS account with permission to create an EC2 instance, a security group, and a key pair (`ec2:RunInstances`, `ec2:CreateSecurityGroup`, `ec2:AuthorizeSecurityGroupIngress`, `ec2:CreateKeyPair`, and the related `Describe*` calls). No RDS, IAM role, or load balancer is required.
+- The existing `MONGODB_URI` for database `focalors`. Put it only in `backend/.env` on the instance.
+- In Atlas Network Access, allow the instance's public IP. Do not open `0.0.0.0/0`.
+
+### Instance setup
+
+Launch Ubuntu 24.04, `t3.medium`, 20 GB gp3. Security group inbound: TCP 22 from your IP, and TCP 80 from the viewers. Leave 8000 closed; only Nginx is public.
+
+On the instance:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y docker.io docker-compose-v2
+sudo usermod -aG docker "$USER"
+```
+
+Log out and back in, clone this repository, then:
+
+```bash
+cp .env.example backend/.env
+```
+
+Edit `backend/.env` and set `MONGODB_URI`. `MONGODB_DATABASE` remains `focalors`.
+
+```bash
+docker compose up -d --build
+```
+
+Open `http://THE_PUBLIC_DNS/`. The site calls `/api` on that same host. `GET /api/health` stays on port 80 and reports MongoDB separately from the API process.
+
+FastAPI binds `HOST` and `PORT` inside the container (`0.0.0.0` and `8000` unless those variables are set). A full 117-pipe search can take longer on this instance than on a workstation; Nginx allows 300 seconds for `/api`.
+
+To point the built site at an API on a different origin, rebuild the web image with `VITE_API_BASE` set to that origin and set `CORS_ORIGINS` to the website origin. Do not use `*`.

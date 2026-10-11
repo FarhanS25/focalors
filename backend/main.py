@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
@@ -12,13 +13,27 @@ from engine import investigate, network_data
 
 logger = logging.getLogger("focalors.api")
 
+
+def cors_origins():
+    """Browser origins allowed to call the API.
+
+    ``CORS_ORIGINS`` is a comma-separated list. When it is unset, only the
+    local Vite dev server is allowed. The deployed site is same-origin, so it
+    does not need a wildcard.
+    """
+    configured = os.environ.get("CORS_ORIGINS", "").strip()
+    if not configured:
+        return ["http://127.0.0.1:5173", "http://localhost:5173"]
+    return [origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip()]
+
+
 app = FastAPI(title="FOCALORS API", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins(),
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
 
 

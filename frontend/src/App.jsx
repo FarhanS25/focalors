@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import cytoscape from 'cytoscape'
 import { Activity, AlertTriangle, Droplets, Network, Play, RefreshCw } from 'lucide-react'
 
-const API = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
+const configuredApi = import.meta.env.VITE_API_BASE
+const API = configuredApi == null
+  ? (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '')
+  : String(configuredApi).replace(/\/$/, '')
 
 const MAP_STYLE = [
   {

@@ -111,6 +111,35 @@ class SelectionTests(unittest.TestCase):
 
 
 class HydraulicTests(unittest.TestCase):
+    def test_pipe_329_leak_is_measurable_and_every_pipe_stays_eligible(self):
+        """One leak and five sensors. The ranker is not given the scenario pipe."""
+        result = investigate(
+            leak_pipe="329",
+            leak_area_m2=1e-4,
+            sensor_count=5,
+            candidate_limit=1,
+            sample_time_s=7200,
+        )
+        signature = np.array(result["signature"], dtype=float)
+        self.assertEqual(len(result["sensors"]), 5)
+        self.assertEqual(result["signature"], [sensor["delta_pressure"] for sensor in result["sensors"]])
+        self.assertGreater(result["observed_signal_max_abs_m"], 1e-3)
+        self.assertGreater(float(np.std(signature)), 1e-4)
+        self.assertFalse(result["ranking_uses_leak_identity"])
+        self.assertEqual(result["leak_pipe"], "329")
+        names = " ".join(inspect.signature(select_candidate_pipes).parameters)
+        self.assertNotIn("leak", names)
+        pipes = [str(pipe) for pipe in base_network().pipe_name_list]
+        chosen = select_candidate_pipes(base_network(), None)
+        self.assertIn("329", chosen)
+        self.assertEqual(chosen, sorted(pipes, key=pipe_sort_key))
+        self.assertEqual(len(result["candidate_pipe_ids"]), 1)
+        if result["true_pipe_in_candidate_set"]:
+            self.assertEqual(result["actual_pipe_rank"], 1)
+        else:
+            self.assertIsNone(result["actual_pipe_rank"])
+            self.assertNotIn("329", result["candidate_pipe_ids"])
+
     def test_unknown_pipe_and_early_sample_fail_before_a_misleading_rank(self):
         with self.assertRaises(ValueError):
             investigate(leak_pipe="not-a-pipe", candidate_limit=2)
