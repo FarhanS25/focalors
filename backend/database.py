@@ -1,39 +1,292 @@
-import json
-import sqlite3
+"""MongoDB persistence for completed simulation runs.
+
+The hydraulic ranker never reads this module. A run is stored only after
+ranking finishes. The scenario leak id is kept under ``evaluation``, separate
+from the ranked predictions.
+"""
+
+import logging
+import math
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 
-DB_PATH = Path(__file__).with_name("focalors.db")
+import numpy as np
+from pymongo import DESCENDING, MongoClient
+from pymongo.errors import PyMongoError
 
-def conn():
-    db = sqlite3.connect(DB_PATH)
-    db.row_factory = sqlite3.Row
-    return db
+logger = logging.getLogger("focalors.database")
+
+_client = None
+_injected = False
+_indexes_ready = False
+
+
+class DatabaseError(Exception):
+    """Client-safe persistence error. The message must not contain credentials."""
+
+
+class DatabaseConfigurationError(DatabaseError):
+    pass
+
+
+class DatabaseUnavailableError(DatabaseError):
+    pass
+
+
+def load_env():
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    backend_dir = Path(__file__).resolve().parent
+    # Existing process variables win. The repo-root file wins over backend/.env.
+    load_dotenv(backend_dir.parent / ".env", override=False)
+    load_dotenv(backend_dir / ".env", override=False)
+
+
+def mongodb_uri():
+    return os.environ.get("MONGODB_URI", "").strip()
+
+
+def db_name():
+    return os.environ.get("MONGODB_DB", "focalors").strip() or "focalors"
+
+
+def collection_name():
+    return os.environ.get("MONGODB_COLLECTION", "simulation_runs").strip() or "simulation_runs"
+
+
+def install_client(client):
+    """Use a test double instead of opening a URI. Not for production."""
+    global _client, _injected, _indexes_ready
+    _client = client
+    _injected = True
+    _indexes_ready = False
+
+
+def reset_client():
+    global _client, _injected, _indexes_ready
+    _client = None
+    _injected = False
+    _indexes_ready = False
+
+
+def get_client():
+    global _client
+    if _injected and _client is not None:
+        return _client
+    uri = mongodb_uri()
+    if not uri:
+        raise DatabaseConfigurationError("MONGODB_URI is not set.")
+    if _client is None:
+        _client = MongoClient(
+            uri,
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=5000,
+            retryWrites=True,
+        )
+    return _client
+
+
+def collection():
+    return get_client()[db_name()][collection_name()]
+
+
+def to_bson(value):
+    """Convert engine results, including NumPy values, into BSON-safe objects."""
+    if isinstance(value, dict):
+        return {str(key): to_bson(item) for key, item in value.items()}
+    if isinstance(value, np.ndarray):
+        return [to_bson(item) for item in value.tolist()]
+    if isinstance(value, (list, tuple)):
+        return [to_bson(item) for item in value]
+    if isinstance(value, np.generic):
+        return to_bson(value.item())
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and not isinstance(value, bool):
+        return int(value)
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise DatabaseError("Simulation result contains a non-finite number and was not saved.")
+        return float(value)
+    if isinstance(value, str) or value is None:
+        return value
+    if isinstance(value, datetime):
+        return value
+    raise DatabaseError(f"Simulation result contains an unsupported value of type {type(value).__name__}.")
+
+
+def build_document(result):
+    data = to_bson(result)
+    if not data.get("leak_pipe"):
+        raise DatabaseError("Simulation result is missing the scenario leak id.")
+    predictions = []
+    for row in data.get("candidates") or []:
+        predictions.append({
+            "pipe_id": row.get("pipe_id"),
+            "matching_error": row.get("matching_error"),
+            "rank": row.get("rank"),
+        })
+    return {
+        "created_at": datetime.now(timezone.utc),
+        "status": "completed",
+        "configuration": {
+            "network": data.get("network"),
+            "leak_area_m2": data.get("leak_area_m2"),
+            "sensor_count": len(data.get("sensors") or []),
+            "candidate_limit": data.get("candidate_limit_requested"),
+            "sample_time_s": data.get("sample_time_requested_s"),
+            "pressure_unit": data.get("pressure_unit"),
+            "candidate_selection": data.get("candidate_selection"),
+            "hydraulic_settings": data.get("hydraulic_settings"),
+        },
+        "evaluation": {
+            "leak_pipe": data.get("leak_pipe"),
+            "leak_pipe_selection": data.get("leak_pipe_selection"),
+            "actual_pipe_rank": data.get("actual_pipe_rank"),
+            "true_pipe_in_candidate_set": data.get("true_pipe_in_candidate_set"),
+        },
+        "sensors": data.get("sensors") or [],
+        "signature": data.get("signature") or [],
+        "observed_signal_max_abs_m": data.get("observed_signal_max_abs_m"),
+        "candidate_pipe_ids": data.get("candidate_pipe_ids") or [],
+        "candidate_count": data.get("candidate_count"),
+        "predictions": predictions,
+        "failures": data.get("failures") or [],
+        "error_metric": data.get("error_metric"),
+        "elapsed_seconds": data.get("elapsed_seconds"),
+        "demonstration": data.get("demonstration"),
+    }
+
+
+def _ensure_indexes():
+    runs = collection()
+    runs.create_index([("created_at", DESCENDING)], name="created_at_desc")
+    runs.create_index("status", name="status")
+    runs.create_index("evaluation.leak_pipe", name="evaluation_leak_pipe")
+
+
+def _ensure_ready():
+    global _indexes_ready
+    try:
+        get_client()
+    except DatabaseConfigurationError:
+        raise
+    except Exception as exc:
+        logger.error("MongoDB client setup failed: %s", type(exc).__name__)
+        raise DatabaseUnavailableError("Could not reach MongoDB.") from exc
+    if _indexes_ready:
+        return
+    try:
+        _ensure_indexes()
+    except DatabaseError:
+        raise
+    except Exception as exc:
+        logger.error("MongoDB index setup failed: %s", type(exc).__name__)
+        raise DatabaseUnavailableError("Could not reach MongoDB.") from exc
+    _indexes_ready = True
+
+
+def ping():
+    if not _injected and not mongodb_uri():
+        return {
+            "status": "unavailable",
+            "engine": "mongodb",
+            "configured": False,
+            "detail": "MONGODB_URI is not set.",
+        }
+    try:
+        get_client().admin.command("ping")
+    except DatabaseConfigurationError:
+        return {
+            "status": "unavailable",
+            "engine": "mongodb",
+            "configured": False,
+            "detail": "MONGODB_URI is not set.",
+        }
+    except Exception as exc:
+        logger.error("MongoDB ping failed: %s", type(exc).__name__)
+        return {
+            "status": "unavailable",
+            "engine": "mongodb",
+            "configured": True,
+            "detail": "Could not reach MongoDB.",
+        }
+    return {
+        "status": "ok",
+        "engine": "mongodb",
+        "configured": True,
+        "database": db_name(),
+        "collection": collection_name(),
+    }
+
 
 def init_db():
-    with conn() as db:
-        db.execute("""CREATE TABLE IF NOT EXISTS runs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            leak_pipe TEXT NOT NULL,
-            leak_area_m2 REAL NOT NULL,
-            candidate_count INTEGER NOT NULL,
-            actual_pipe_rank INTEGER,
-            result_json TEXT NOT NULL
-        )""")
+    report = ping()
+    if report["status"] != "ok":
+        return report
+    try:
+        _ensure_ready()
+    except DatabaseError as exc:
+        return {
+            "status": "unavailable",
+            "engine": "mongodb",
+            "configured": True,
+            "detail": str(exc),
+        }
+    return report
+
 
 def save_result(result):
-    with conn() as db:
-        cur = db.execute(
-            "INSERT INTO runs (leak_pipe, leak_area_m2, candidate_count, actual_pipe_rank, result_json) VALUES (?, ?, ?, ?, ?)",
-            (result["leak_pipe"], result["leak_area_m2"], result["candidate_count"],
-             result.get("actual_pipe_rank"), json.dumps(result))
-        )
-        return cur.lastrowid
+    _ensure_ready()
+    try:
+        document = build_document(result)
+        inserted = collection().insert_one(document)
+    except DatabaseError:
+        raise
+    except PyMongoError as exc:
+        logger.error("MongoDB insert failed: %s", type(exc).__name__)
+        raise DatabaseUnavailableError("Could not save the simulation run.") from exc
+    except Exception as exc:
+        logger.error("MongoDB insert failed: %s", type(exc).__name__)
+        raise DatabaseUnavailableError("Could not save the simulation run.") from exc
+    if getattr(inserted, "inserted_id", None) is None:
+        raise DatabaseUnavailableError("Could not save the simulation run.")
+    return str(inserted.inserted_id)
+
+
+def _created_at_text(value):
+    if isinstance(value, datetime):
+        return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    return value
+
 
 def recent_runs(limit=20):
-    with conn() as db:
-        rows = db.execute(
-            "SELECT id, created_at, leak_pipe, leak_area_m2, candidate_count, actual_pipe_rank FROM runs ORDER BY id DESC LIMIT ?",
-            (limit,)
-        ).fetchall()
-        return [dict(r) for r in rows]
+    _ensure_ready()
+    try:
+        cursor = collection().find().sort("created_at", DESCENDING).limit(int(limit))
+        documents = list(cursor)
+    except DatabaseError:
+        raise
+    except Exception as exc:
+        logger.error("MongoDB read failed: %s", type(exc).__name__)
+        raise DatabaseUnavailableError("Could not read saved runs.") from exc
+    runs = []
+    for document in documents:
+        evaluation = document.get("evaluation") or {}
+        configuration = document.get("configuration") or {}
+        runs.append({
+            "id": str(document.get("_id")),
+            "created_at": _created_at_text(document.get("created_at")),
+            "leak_pipe": evaluation.get("leak_pipe"),
+            "leak_area_m2": configuration.get("leak_area_m2"),
+            "candidate_count": document.get("candidate_count"),
+            "actual_pipe_rank": evaluation.get("actual_pipe_rank"),
+            "status": document.get("status"),
+        })
+    return runs
+
+
+load_env()
