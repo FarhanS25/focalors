@@ -232,9 +232,8 @@ function Navbar() {
           })}
         </div>
 
-        {/* Explore Platform — intentionally no navigation */}
-        <motion.button
-          type="button"
+        <motion.a
+          href="/investigate"
           whileHover={shouldReduceMotion ? undefined : { scale: 1.025, y: -1 }}
           whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
           transition={{
@@ -251,7 +250,7 @@ function Navbar() {
           {/* Hover sheen */}
           <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
 
-          <span className="relative">Explore Platform</span>
+          <span className="relative">Open investigation</span>
 
           <span
             className={`relative flex h-7 w-7 items-center justify-center rounded-full transition-colors duration-300 ${
@@ -265,7 +264,7 @@ function Navbar() {
               className="transition-transform duration-300 group-hover:translate-x-1"
             />
           </span>
-        </motion.button>
+        </motion.a>
       </nav>
     </motion.header>
   );
