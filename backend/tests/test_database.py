@@ -218,6 +218,101 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(recorded[1], (root_env.resolve(), False))
         self.assertNotEqual(recorded[0][0].parent, Path(directory).resolve())
 
+    def test_reset_client_closes_the_existing_client_and_ignores_a_missing_one(self):
+        """Uses a fake client. This does not contact Atlas."""
+        class Closable:
+            def __init__(self):
+                self.calls = 0
+
+            def close(self):
+                self.calls += 1
+
+        client = Closable()
+        database.install_client(client)
+        database.reset_client()
+        self.assertEqual(client.calls, 1)
+        self.assertIsNone(database._client)
+        self.assertFalse(database._injected)
+        database.reset_client()
+        self.assertEqual(client.calls, 1)
+        self.assertIsNone(database._client)
+
+        class Failing:
+            def close(self):
+                raise RuntimeError("mongodb+srv://user:secret@cluster.example")
+
+        database.install_client(Failing())
+        with self.assertLogs("focalors.database", level="ERROR") as logs:
+            database.reset_client()
+        self.assertIsNone(database._client)
+        self.assertFalse(database._injected)
+        self.assertIn("RuntimeError", " ".join(logs.output))
+        self.assertNotIn("secret", " ".join(logs.output))
+        database.reset_client()
+
+    def test_install_client_closes_the_client_it_replaces(self):
+        """Uses fake clients. This does not contact Atlas."""
+        class Closable:
+            def __init__(self):
+                self.calls = 0
+
+            def close(self):
+                self.calls += 1
+
+        first = Closable()
+        database.install_client(first)
+        self.assertEqual(first.calls, 0)
+        self.assertIs(database.get_client(), first)
+        second = Closable()
+        database.install_client(second)
+        self.assertEqual(first.calls, 1)
+        self.assertEqual(second.calls, 0)
+        self.assertIs(database.get_client(), second)
+        self.assertTrue(database._injected)
+        self.assertFalse(database._indexes_ready)
+
+    def test_install_client_does_not_close_the_same_instance(self):
+        """Uses a fake client. This does not contact Atlas."""
+        class Closable:
+            def __init__(self):
+                self.calls = 0
+
+            def close(self):
+                self.calls += 1
+
+        client = Closable()
+        database.install_client(client)
+        database._indexes_ready = True
+        database.install_client(client)
+        self.assertEqual(client.calls, 0)
+        self.assertIs(database.get_client(), client)
+        self.assertTrue(database._injected)
+        self.assertFalse(database._indexes_ready)
+
+    def test_install_client_keeps_the_new_client_when_close_fails(self):
+        """Uses fake clients. This does not contact Atlas."""
+        class Failing:
+            def close(self):
+                raise RuntimeError("mongodb+srv://user:secret@cluster.example")
+
+        class Closable:
+            def __init__(self):
+                self.calls = 0
+
+            def close(self):
+                self.calls += 1
+
+        database.install_client(Failing())
+        replacement = Closable()
+        with self.assertLogs("focalors.database", level="ERROR") as logs:
+            database.install_client(replacement)
+        self.assertEqual(replacement.calls, 0)
+        self.assertIs(database.get_client(), replacement)
+        self.assertTrue(database._injected)
+        joined = " ".join(logs.output)
+        self.assertIn("RuntimeError", joined)
+        self.assertNotIn("secret", joined)
+
     def test_atlas_ping_when_credentials_are_configured(self):
         uri = os.environ.get("MONGODB_URI", "").strip()
         if not uri:

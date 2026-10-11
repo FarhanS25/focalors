@@ -66,19 +66,52 @@ def collection_name():
     return os.environ.get("MONGODB_COLLECTION", "simulation_runs").strip() or "simulation_runs"
 
 
+def _close_client(client):
+    """Close a discarded client. Missing clients and close errors stay local.
+
+    The exception message is not logged: a driver error can contain the URI.
+    """
+    close = getattr(client, "close", None)
+    if not callable(close):
+        return
+    try:
+        close()
+    except Exception as exc:
+        logger.error("MongoDB client close failed: %s", type(exc).__name__)
+
+
 def install_client(client):
-    """Use a test double instead of opening a URI. Not for production."""
+    """Use a test double instead of opening a URI. Not for production.
+
+    The shared reference is swapped before the previous client is closed, so
+    ``close`` is not invoked on the client still published for reuse. The same
+    instance can be installed again without closing it. There is no module
+    lock; this matches the existing global client and avoids holding a lock
+    across ``close``.
+    """
     global _client, _injected, _indexes_ready
+    previous = _client
     _client = client
     _injected = True
     _indexes_ready = False
+    if previous is not client:
+        _close_client(previous)
 
 
 def reset_client():
+    """Discard the shared client. A real client is closed first.
+
+    Safe when no client is installed, when ``close`` is missing, and when
+    ``close`` raises. The reference is cleared before closing so a later
+    ``get_client`` cannot reuse a client that is shutting down. Closing
+    failures are logged by exception type and do not propagate.
+    """
     global _client, _injected, _indexes_ready
+    client = _client
     _client = None
     _injected = False
     _indexes_ready = False
+    _close_client(client)
 
 
 def get_client():
